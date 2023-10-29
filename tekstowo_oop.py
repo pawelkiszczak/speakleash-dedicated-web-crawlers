@@ -83,7 +83,8 @@ class Scraper():
 
         Returns:
             lut_letters (dict): contains a key/value pairs of alphabet 
-            upparcase letters and maximum page number retrieved for it.
+                uppercase letters and maximum page number retrieved 
+                for it.
         """
 
         lut_pages = {}
@@ -114,8 +115,8 @@ class Scraper():
         Parameters:
             letter (str): a single capital letter from the alphabet
             max_page_per_letter (dict or int): a dictionary of key-value 
-            pairs of capital letters with responding maximum number of
-            pages
+                pairs of capital letters with responding maximum number of
+                pages
 
         Returns:
             urls (list): a list of artists' URLs for further scraping
@@ -225,6 +226,133 @@ class Scraper():
         print(f"Artist {artist}, collected {len(urls)} song URLs")
         return urls
     
+    def extract_song(self, song_url: str) -> Tuple[str]:
+        """
+        Scrapes the song (and song_translation if found) and its
+        title from a given song_url.
+
+        Parameters:
+            song_url (str): a URL to a single song
+
+        Returns:
+            song (str): a string containing song's lyrics
+            song_translation (str): a string containing 
+                song's lyrics translated, returnd if found
+            song_title (str): extrated song's title 
+        """
+
+        song = ""
+        song_translation = None
+
+        try:
+            response = requests.get(song_url, timeout=60)
+            if response.ok:
+                # Scrape URL content with BeautifulSoup
+                soup = BeautifulSoup(response.content, "lxml")
+
+                # Song title
+                song_title = soup.find(class_="col-lg-7").text.strip()
+
+                # Original song
+                song_html = soup.find(class_="inner-text")
+                song = song_html.text.strip()
+
+                # Translated version
+                transl_html = soup.find("div", id="translation")
+                song_translation = transl_html.text.strip().split("\t\t")[0]
+        except Exception as e:
+            print(e)
+
+        return song, song_translation, song_title
+
+    def assess_language(self, song_text: str) -> str:
+        """
+        Detect the language of provided song.
+
+        Parameters:
+            song_text (str): song's lyrics
+
+        Returns:
+            song_lang (str): 
+        """
+        if not isinstance(song_text, str):
+            return False
+
+        try:
+            return langdetect.detect(song_text)
+        except langdetect.lang_detect_exception.LangDetectException:
+            return False
+
+    def save_songs(self,
+        title: str, 
+        original_song: str, 
+        translated_song: str, 
+        lang_base: str, 
+        lang_transl: str
+    ):
+        """
+        Save the scraped song with corresponding languages
+        and title.
+
+        Parameters: 
+            title (str): song title
+            original_song (str): lyrics of a song to be saved
+            translated_song (str): translated lyrics of a song
+                to be saved
+            lang_base (str): language of original lyrics
+            lang_transl (str): language of translated lyrics, 
+                returned if lyrics were present
+
+        Returns:
+            True (bool): if everything was processed properly
+        """
+
+        # Saving directory
+        save_dir = "teksty/"
+        os.makedirs(save_dir, exist_ok=True)
+
+        # Title cannot have backslash in it
+        clean_title = title.replace("/", "-")
+
+        # Original song
+        if isinstance(lang_base, str) and len(lang_base) < 3 and len(original_song) > 10:
+            original_song_filename = f"{clean_title}__{lang_base.upper()}.txt"
+
+            # Save to a file
+            with open(
+                os.path.join(save_dir, original_song_filename), "w", encoding="utf-8"
+            ) as f:
+                f.write(original_song)
+                print(f"Song saved: {title}")
+                #print(f"{generate_timestamp()}: Original successfully saved: {title}")
+        else:
+            #print(f"{generate_timestamp()}: Song {title} is too short or has no text.")
+            print(f"{title}: Lyrics not found or empty")
+
+        # Translated song
+        if isinstance(lang_transl, str) and len(lang_transl) < 3 and len(translated_song) > 10:
+            translated_song_filename = f"{clean_title}__TRAN__{lang_transl.upper()}.txt"
+
+            # Save to a file
+            with open(
+                os.path.join(save_dir, translated_song_filename), "w", encoding="utf-8"
+            ) as f:
+                f.write(translated_song)
+                #print(f"{generate_timestamp()}: Translation successfully saved: {title}")
+        else:
+            #print(f"{generate_timestamp()}: Translation not found or empty.")
+            print(f"{title}: Translation not found or empty")
+    
+        return True
+
+class Files():
+
+    # CLASS INIT
+    def __init__ (self):
+        pass
+
+    # CLASS METHODS
+
 
 if __name__ == "__main__":
 
@@ -259,5 +387,16 @@ if __name__ == "__main__":
     tekstowo_scraper = Scraper()
     #tekstowo_scraper.max_page_number_letter(ARTIST_LETTER)
     #tekstowo_scraper.create_lut_pagination()
-    #tekstowo_scraper.get_artists(ARTIST_LETTER, 10)
-            
+
+    urls, cnt = tekstowo_scraper.get_artists(ARTIST_LETTER, 2)
+
+    for url in urls:
+        songs = tekstowo_scraper.get_artist_songs(url)
+        
+        for song in songs:
+            s, st, t = tekstowo_scraper.extract_song(song)
+
+            s_t = tekstowo_scraper.assess_language(s)
+            st_t = tekstowo_scraper.assess_language(st)
+
+            tekstowo_scraper.save_songs(t, s, st, s_t, st_t)

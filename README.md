@@ -45,7 +45,7 @@ This script is designed to scrape song lyrics and related information for artist
 You can install the required packages using pip:
 
 ```bash
-pip install beautifulsoup4 requests langdetect
+pip install bs4 requests langdetect
 ```
 
 ### Installation
